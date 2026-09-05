@@ -3,8 +3,13 @@ import random
 import time
 from datetime import datetime, timezone
 
+from kafka import KafkaProducer
+
 from anomaly_injector import inject_anomaly
 
+
+KAFKA_BROKER = "localhost:9092"
+KAFKA_TOPIC = "checkout-events"
 
 PAYMENT_METHODS = ["UPI", "CARD", "NET_BANKING", "WALLET"]
 
@@ -28,25 +33,46 @@ def generate_event(transaction_number):
 
 def main():
 
+    producer = KafkaProducer(
+        bootstrap_servers=KAFKA_BROKER,
+        value_serializer=lambda value: json.dumps(value).encode("utf-8")
+    )
+
     transaction_number = 1
 
-    print("🚀 IceStream E-commerce Event Generator Started")
+    print("🚀 IceStream Kafka Producer Started")
+    print(f"📡 Broker: {KAFKA_BROKER}")
+    print(f"📦 Topic: {KAFKA_TOPIC}")
     print("Press CTRL+C to stop.\n")
 
-    while True:
+    try:
 
-        event = generate_event(transaction_number)
+        while True:
 
-        event, anomaly_type = inject_anomaly(event)
+            event = generate_event(transaction_number)
 
-        print(
-            f"Event: {json.dumps(event)} | "
-            f"Anomaly: {anomaly_type}"
-        )
+            event, anomaly_type = inject_anomaly(event)
 
-        transaction_number += 1
+            producer.send(KAFKA_TOPIC, value=event)
 
-        time.sleep(2)
+            producer.flush()
+
+            print(
+                f"Sent: {event['transaction_id']} | "
+                f"Anomaly: {anomaly_type}"
+            )
+
+            transaction_number += 1
+
+            time.sleep(2)
+
+    except KeyboardInterrupt:
+
+        print("\n🛑 Producer stopped.")
+
+    finally:
+
+        producer.close()
 
 
 if __name__ == "__main__":
