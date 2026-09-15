@@ -48,3 +48,5 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+# Flink runtime JAR dependencies
+flink/*.jar

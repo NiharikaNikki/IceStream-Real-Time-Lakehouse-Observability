@@ -13,7 +13,7 @@ def main():
 
     source = (
         KafkaSource.builder()
-        .set_bootstrap_servers("kafka:9092")
+        .set_bootstrap_servers("kafka:29092")
         .set_topics("checkout-events")
         .set_group_id("icestream-flink")
         .set_starting_offsets(KafkaOffsetsInitializer.earliest())
