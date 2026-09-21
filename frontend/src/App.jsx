@@ -16,6 +16,10 @@ import "./App.css";
 import { getMetrics } from "./api";
 
 
+/* =========================================================
+   PIPELINE NODES
+   ========================================================= */
+
 const initialNodes = [
   {
     id: "generator",
@@ -109,6 +113,10 @@ const initialNodes = [
 ];
 
 
+/* =========================================================
+   PIPELINE EDGES
+   ========================================================= */
+
 const initialEdges = [
   {
     id: "e-generator-kafka",
@@ -147,13 +155,41 @@ const initialEdges = [
 ];
 
 
+/* =========================================================
+   APP
+   ========================================================= */
+
 function App() {
+
+  /* -----------------------------
+     React Flow State
+     ----------------------------- */
+
   const [nodes, setNodes, onNodesChange] =
     useNodesState(initialNodes);
 
   const [edges, setEdges, onEdgesChange] =
     useEdgesState(initialEdges);
 
+
+  /* -----------------------------
+     Alerts State
+     ----------------------------- */
+
+  const [alerts, setAlerts] = useState([]);
+
+
+  /* -----------------------------
+     WebSocket Status
+     ----------------------------- */
+
+  const [connectionStatus, setConnectionStatus] =
+    useState("CONNECTING");
+
+
+  /* -----------------------------
+     Metrics State
+     ----------------------------- */
 
   const [metrics, setMetrics] = useState({
     total_records: 0,
@@ -165,107 +201,307 @@ function App() {
   });
 
 
-  const [backendStatus, setBackendStatus] = useState(
-    "Connecting..."
-  );
+  /* -----------------------------
+     Backend Status
+     ----------------------------- */
 
+  const [backendStatus, setBackendStatus] =
+    useState("Connecting...");
+
+
+  /* =========================================================
+     REACT FLOW CONNECTION
+     ========================================================= */
 
   const onConnect = useCallback(
     (connection) => {
+
       setEdges((currentEdges) =>
         addEdge(connection, currentEdges)
       );
+
     },
     [setEdges]
   );
 
 
+  /* =========================================================
+     LOAD BACKEND METRICS
+     ========================================================= */
+
   useEffect(() => {
+
     async function loadMetrics() {
+
       try {
+
         const data = await getMetrics();
 
         setMetrics(data);
 
         setBackendStatus("Connected");
-      } catch (error) {
-        console.error("Metrics error:", error);
 
-        setBackendStatus("Backend Offline");
+      } catch (error) {
+
+        console.error(
+          "Metrics error:",
+          error
+        );
+
+        setBackendStatus(
+          "Backend Offline"
+        );
       }
     }
 
+
     loadMetrics();
+
   }, []);
 
+
+  /* =========================================================
+     WEBSOCKET CONNECTION
+     ========================================================= */
+
+  useEffect(() => {
+
+    const socket =
+      new WebSocket(
+        "ws://127.0.0.1:8000/ws/events"
+      );
+
+
+    /* -----------------------------
+       WebSocket Connected
+       ----------------------------- */
+
+    socket.onopen = () => {
+
+      console.log(
+        "WebSocket connected"
+      );
+
+      setConnectionStatus(
+        "CONNECTED"
+      );
+    };
+
+
+    /* -----------------------------
+       WebSocket Message
+       ----------------------------- */
+
+    socket.onmessage = (event) => {
+
+      try {
+
+        const message =
+          JSON.parse(event.data);
+
+
+        console.log(
+          "WebSocket message:",
+          message
+        );
+
+
+        /* -----------------------------
+           Alert Message
+           ----------------------------- */
+
+        if (message.type === "alert") {
+
+          setAlerts(
+            (currentAlerts) => [
+
+              {
+                ...message,
+
+                id: Date.now(),
+
+                timestamp:
+                  new Date()
+                    .toLocaleTimeString(),
+              },
+
+              ...currentAlerts,
+
+            ]
+          );
+        }
+
+      } catch (error) {
+
+        console.error(
+          "WebSocket message error:",
+          error
+        );
+      }
+    };
+
+
+    /* -----------------------------
+       WebSocket Error
+       ----------------------------- */
+
+    socket.onerror = () => {
+
+      console.error(
+        "WebSocket error"
+      );
+
+      setConnectionStatus(
+        "ERROR"
+      );
+    };
+
+
+    /* -----------------------------
+       WebSocket Closed
+       ----------------------------- */
+
+    socket.onclose = () => {
+
+      console.log(
+        "WebSocket disconnected"
+      );
+
+      setConnectionStatus(
+        "DISCONNECTED"
+      );
+    };
+
+
+    /* -----------------------------
+       Cleanup
+       ----------------------------- */
+
+    return () => {
+
+      socket.close();
+
+    };
+
+  }, []);
+
+
+  /* =========================================================
+     CIRCUIT BREAKER
+     ========================================================= */
 
   const circuitIsOpen =
     metrics.circuit_state === "OPEN";
 
 
+  /* =========================================================
+     UI
+     ========================================================= */
+
   return (
+
     <div className="dashboard">
 
-      {/* HEADER */}
+
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
       <header className="header">
 
         <div>
-          <h1>IceStream</h1>
+
+          <h1>
+            IceStream
+          </h1>
 
           <p>
             Real-Time Lakehouse Observability
           </p>
+
         </div>
 
 
         <div className="status">
 
-          <span
-            className="status-dot"
-            style={{
-              background:
-                circuitIsOpen
-                  ? "red"
-                  : backendStatus === "Connected"
-                    ? "green"
-                    : "orange",
-            }}
-          ></span>
 
-          Pipeline Status:{" "}
+          {/* WebSocket Status */}
 
-          {circuitIsOpen
-            ? "CIRCUIT OPEN"
-            : metrics.circuit_state}
+          <div>
+
+            <span
+              className="status-dot"
+            ></span>
+
+            WebSocket:{" "}
+            {connectionStatus}
+
+          </div>
+
+
+          {/* Pipeline Status */}
+
+          <div>
+
+            <span
+              className="status-dot"
+              style={{
+                background:
+                  circuitIsOpen
+                    ? "red"
+                    : backendStatus ===
+                        "Connected"
+                      ? "green"
+                      : "orange",
+              }}
+            ></span>
+
+            Pipeline Status:{" "}
+
+            {circuitIsOpen
+              ? "CIRCUIT OPEN"
+              : metrics.circuit_state}
+
+          </div>
 
         </div>
 
       </header>
 
 
-      {/* BACKEND CONNECTION */}
+      {/* =====================================================
+          BACKEND STATUS
+          ===================================================== */}
 
       <div className="backend-status">
 
         Backend:
 
         <strong>
+
           {" "}
+
           {backendStatus}
+
         </strong>
 
       </div>
 
 
-      {/* METRICS */}
+      {/* =====================================================
+          METRICS
+          ===================================================== */}
 
       <section className="metrics">
 
 
+        {/* Total Records */}
+
         <div className="metric-card">
 
-          <h3>Total Records</h3>
+          <h3>
+            Total Records
+          </h3>
 
           <p>
             {metrics.total_records}
@@ -274,9 +510,13 @@ function App() {
         </div>
 
 
+        {/* Valid Records */}
+
         <div className="metric-card">
 
-          <h3>Valid Records</h3>
+          <h3>
+            Valid Records
+          </h3>
 
           <p>
             {metrics.valid_records}
@@ -285,9 +525,13 @@ function App() {
         </div>
 
 
+        {/* Invalid Records */}
+
         <div className="metric-card">
 
-          <h3>Invalid Records</h3>
+          <h3>
+            Invalid Records
+          </h3>
 
           <p>
             {metrics.invalid_records}
@@ -296,9 +540,13 @@ function App() {
         </div>
 
 
+        {/* Error Rate */}
+
         <div className="metric-card">
 
-          <h3>Error Rate</h3>
+          <h3>
+            Error Rate
+          </h3>
 
           <p>
             {metrics.error_rate}%
@@ -307,9 +555,13 @@ function App() {
         </div>
 
 
+        {/* DLQ */}
+
         <div className="metric-card">
 
-          <h3>DLQ Count</h3>
+          <h3>
+            DLQ Count
+          </h3>
 
           <p>
             {metrics.dlq_count}
@@ -317,17 +569,19 @@ function App() {
 
         </div>
 
-
       </section>
 
 
-      {/* CIRCUIT BREAKER STATUS */}
+      {/* =====================================================
+          CIRCUIT BREAKER
+          ===================================================== */}
 
       <section className="circuit-card">
 
         <h2>
           Circuit Breaker
         </h2>
+
 
         <div
           className={
@@ -341,6 +595,7 @@ function App() {
 
         </div>
 
+
         <p>
           Threshold: 2% error rate
         </p>
@@ -348,9 +603,153 @@ function App() {
       </section>
 
 
-      {/* PIPELINE */}
+      {/* =====================================================
+          LIVE PIPELINE ALERTS
+          ===================================================== */}
+
+      <section className="alerts-section">
+
+
+        {/* Alerts Header */}
+
+        <div className="alerts-header">
+
+          <h2>
+            Live Pipeline Alerts
+          </h2>
+
+          <span>
+            {alerts.length} alerts
+          </span>
+
+        </div>
+
+
+        {/* No Alerts */}
+
+        {alerts.length === 0 ? (
+
+          <div className="no-alerts">
+
+            No active alerts
+
+          </div>
+
+        ) : (
+
+
+          /* Alerts List */
+
+          <div className="alerts-list">
+
+            {alerts.map((alert) => (
+
+              <div
+                className={`alert-card ${
+                  (
+                    alert.severity ||
+                    "info"
+                  ).toLowerCase()
+                }`}
+                key={alert.id}
+              >
+
+
+                {/* Alert Title */}
+
+                <div className="alert-title">
+
+                  <strong>
+
+                    🚨{" "}
+
+                    {alert.alert_type}
+
+                  </strong>
+
+
+                  <span>
+
+                    {alert.timestamp}
+
+                  </span>
+
+                </div>
+
+
+                {/* Alert Message */}
+
+                <p>
+
+                  {alert.message}
+
+                </p>
+
+
+                {/* Alert Details */}
+
+                <div className="alert-details">
+
+
+                  <span>
+
+                    Severity:{" "}
+
+                    {alert.severity ||
+                      "INFO"}
+
+                  </span>
+
+
+                  <span>
+
+                    Error Rate:{" "}
+
+                    {alert.error_rate ??
+                      0}%
+
+                  </span>
+
+
+                  <span>
+
+                    DLQ:{" "}
+
+                    {alert.dlq_count ??
+                      0}
+
+                  </span>
+
+
+                  <span>
+
+                    Circuit:{" "}
+
+                    {alert.circuit_state ||
+                      "UNKNOWN"}
+
+                  </span>
+
+
+                </div>
+
+              </div>
+
+            ))}
+
+          </div>
+
+        )}
+
+      </section>
+
+
+      {/* =====================================================
+          PIPELINE LINEAGE
+          ===================================================== */}
 
       <section className="flow-container">
+
 
         <h2>
           Live Pipeline Lineage
@@ -358,9 +757,12 @@ function App() {
 
 
         <p className="flow-description">
-          Real-time data flow from event generation
-          through Kafka, Flink, data quality validation,
-          and Iceberg storage.
+
+          Real-time data flow from event
+          generation through Kafka, Flink,
+          data quality validation, and
+          Iceberg storage.
+
         </p>
 
 
@@ -369,8 +771,12 @@ function App() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={
+              onNodesChange
+            }
+            onEdgesChange={
+              onEdgesChange
+            }
             onConnect={onConnect}
             fitView
           >
@@ -388,20 +794,31 @@ function App() {
       </section>
 
 
-      {/* FOOTER */}
+      {/* =====================================================
+          FOOTER
+          ===================================================== */}
 
       <footer>
 
         <p>
+
           IceStream • Real-Time Lakehouse
           Observability Platform
+
         </p>
 
       </footer>
 
+
     </div>
+
   );
+
 }
 
+
+/* =========================================================
+   EXPORT
+   ========================================================= */
 
 export default App;

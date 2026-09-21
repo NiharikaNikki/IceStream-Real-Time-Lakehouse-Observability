@@ -57,3 +57,24 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+
+async def broadcast_alert(
+    alert_type,
+    message,
+    severity,
+    error_rate=0.0,
+    dlq_count=0,
+    circuit_state="CLOSED",
+):
+    alert = {
+        "type": "alert",
+        "alert_type": alert_type,
+        "severity": severity,
+        "message": message,
+        "error_rate": error_rate,
+        "dlq_count": dlq_count,
+        "circuit_state": circuit_state,
+    }
+
+    await manager.broadcast(alert)

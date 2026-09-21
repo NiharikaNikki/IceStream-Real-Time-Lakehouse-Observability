@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.websocket import router as websocket_router
+from backend.websocket import broadcast_alert
 
 
 app = FastAPI(
@@ -48,4 +49,38 @@ def metrics():
         "error_rate": 0.0,
         "dlq_count": 0,
         "circuit_state": "CLOSED",
+    }
+
+
+@app.post("/alerts/test")
+async def test_alert():
+    await broadcast_alert(
+        alert_type="CIRCUIT_OPEN",
+        message="Error rate exceeded 2%. Circuit breaker opened.",
+        severity="CRITICAL",
+        error_rate=3.25,
+        dlq_count=5,
+        circuit_state="OPEN",
+    )
+
+    return {
+        "status": "alert_sent",
+        "alert_type": "CIRCUIT_OPEN",
+    }
+
+
+@app.post("/alerts/recovery")
+async def recovery_alert():
+    await broadcast_alert(
+        alert_type="RECOVERY",
+        message="Pipeline recovered. Circuit breaker closed.",
+        severity="INFO",
+        error_rate=0.5,
+        dlq_count=0,
+        circuit_state="CLOSED",
+    )
+
+    return {
+        "status": "alert_sent",
+        "alert_type": "RECOVERY",
     }
