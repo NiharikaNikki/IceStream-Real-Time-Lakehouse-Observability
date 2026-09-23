@@ -2,3 +2,5 @@ kafka-python
 fastapi
 uvicorn
 websockets
+pyiceberg
+pyarrow
