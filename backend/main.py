@@ -3,7 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.websocket import router as websocket_router
 from backend.websocket import broadcast_alert
+from backend.incidents import IncidentLogger
 
+
+# =========================================================
+# INCIDENT LOGGER
+# =========================================================
+
+incident_logger = IncidentLogger()
+
+
+# =========================================================
+# FASTAPI APPLICATION
+# =========================================================
 
 app = FastAPI(
     title="IceStream Observability API",
@@ -11,6 +23,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
+# =========================================================
+# CORS
+# =========================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,8 +37,16 @@ app.add_middleware(
 )
 
 
+# =========================================================
+# WEBSOCKET ROUTER
+# =========================================================
+
 app.include_router(websocket_router)
 
+
+# =========================================================
+# ROOT
+# =========================================================
 
 @app.get("/")
 def root():
@@ -33,12 +57,20 @@ def root():
     }
 
 
+# =========================================================
+# HEALTH CHECK
+# =========================================================
+
 @app.get("/health")
 def health():
     return {
         "status": "healthy",
     }
 
+
+# =========================================================
+# METRICS
+# =========================================================
 
 @app.get("/metrics")
 def metrics():
@@ -52,8 +84,13 @@ def metrics():
     }
 
 
+# =========================================================
+# TEST CIRCUIT OPEN ALERT
+# =========================================================
+
 @app.post("/alerts/test")
 async def test_alert():
+
     await broadcast_alert(
         alert_type="CIRCUIT_OPEN",
         message="Error rate exceeded 2%. Circuit breaker opened.",
@@ -69,8 +106,13 @@ async def test_alert():
     }
 
 
+# =========================================================
+# TEST RECOVERY ALERT
+# =========================================================
+
 @app.post("/alerts/recovery")
 async def recovery_alert():
+
     await broadcast_alert(
         alert_type="RECOVERY",
         message="Pipeline recovered. Circuit breaker closed.",
@@ -84,3 +126,54 @@ async def recovery_alert():
         "status": "alert_sent",
         "alert_type": "RECOVERY",
     }
+
+
+# =========================================================
+# GET INCIDENTS
+# =========================================================
+
+@app.get("/incidents")
+def get_incidents():
+
+    return {
+        "count": incident_logger.count(),
+        "incidents": incident_logger.get_incidents(),
+    }
+
+
+# =========================================================
+# CREATE TEST INCIDENT
+# =========================================================
+
+@app.post("/incidents/test")
+async def create_test_incident():
+
+    incident = incident_logger.create_incident(
+        incident_type="CIRCUIT_OPEN",
+        message="Error rate exceeded 2%. Pipeline automatically paused.",
+        severity="CRITICAL",
+        error_rate=3.25,
+        dlq_count=5,
+        circuit_state="OPEN",
+    )
+
+    return incident
+
+
+# =========================================================
+# CREATE RECOVERY INCIDENT
+# =========================================================
+
+@app.post("/incidents/recovery")
+async def create_recovery_incident():
+
+    incident = incident_logger.create_incident(
+        incident_type="RECOVERY",
+        message="Pipeline recovered and circuit breaker returned to CLOSED state.",
+        severity="INFO",
+        error_rate=0.5,
+        dlq_count=0,
+        circuit_state="CLOSED",
+    )
+
+    return incident
