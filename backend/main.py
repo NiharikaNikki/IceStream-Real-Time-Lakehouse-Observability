@@ -45,7 +45,7 @@ app.include_router(websocket_router)
 
 
 # =========================================================
-# ROOT
+# ROOT ENDPOINT
 # =========================================================
 
 @app.get("/")
@@ -69,7 +69,7 @@ def health():
 
 
 # =========================================================
-# METRICS
+# PIPELINE METRICS
 # =========================================================
 
 @app.get("/metrics")
@@ -85,12 +85,11 @@ def metrics():
 
 
 # =========================================================
-# TEST CIRCUIT OPEN ALERT
+# DAY 12 - TEST CIRCUIT OPEN ALERT
 # =========================================================
 
 @app.post("/alerts/test")
 async def test_alert():
-
     await broadcast_alert(
         alert_type="CIRCUIT_OPEN",
         message="Error rate exceeded 2%. Circuit breaker opened.",
@@ -107,12 +106,11 @@ async def test_alert():
 
 
 # =========================================================
-# TEST RECOVERY ALERT
+# DAY 12 - RECOVERY ALERT
 # =========================================================
 
 @app.post("/alerts/recovery")
 async def recovery_alert():
-
     await broadcast_alert(
         alert_type="RECOVERY",
         message="Pipeline recovered. Circuit breaker closed.",
@@ -129,12 +127,11 @@ async def recovery_alert():
 
 
 # =========================================================
-# GET INCIDENTS
+# DAY 14 - GET INCIDENT HISTORY
 # =========================================================
 
 @app.get("/incidents")
 def get_incidents():
-
     return {
         "count": incident_logger.count(),
         "incidents": incident_logger.get_incidents(),
@@ -142,12 +139,11 @@ def get_incidents():
 
 
 # =========================================================
-# CREATE TEST INCIDENT
+# DAY 14 - CREATE TEST INCIDENT
 # =========================================================
 
 @app.post("/incidents/test")
 async def create_test_incident():
-
     incident = incident_logger.create_incident(
         incident_type="CIRCUIT_OPEN",
         message="Error rate exceeded 2%. Pipeline automatically paused.",
@@ -161,12 +157,11 @@ async def create_test_incident():
 
 
 # =========================================================
-# CREATE RECOVERY INCIDENT
+# DAY 14 - CREATE RECOVERY INCIDENT
 # =========================================================
 
 @app.post("/incidents/recovery")
 async def create_recovery_incident():
-
     incident = incident_logger.create_incident(
         incident_type="RECOVERY",
         message="Pipeline recovered and circuit breaker returned to CLOSED state.",

@@ -1,40 +1,46 @@
-from schema_detector import detect_schema_drift
+from quality.schema_detector import detect_schema_drift
 
 
-valid_event = {
-    "transaction_id": "TXN-001",
-    "customer_id": "CUST-001",
-    "amount": 1000,
-    "tax_amount": 180,
-    "currency": "INR",
-    "payment_method": "UPI",
-    "timestamp": "2026-09-11T10:00:00+00:00",
-}
+def valid_event():
+    return {
+        "transaction_id": "TXN-001",
+        "customer_id": "CUST-001",
+        "amount": 1000,
+        "tax_amount": 180,
+        "currency": "INR",
+        "payment_method": "UPI",
+        "timestamp": "2026-09-11T10:00:00+00:00",
+    }
 
 
-extra_field_event = valid_event.copy()
-extra_field_event["discount_code"] = "NEW10"
+def test_valid_schema():
+    result = detect_schema_drift(valid_event())
+
+    assert result["is_drift"] is False
+    assert result["missing_fields"] == []
+    assert result["extra_fields"] == []
+    assert result["reason"] == "Schema matches expected schema"
 
 
-missing_field_event = valid_event.copy()
-del missing_field_event["tax_amount"]
+def test_extra_field_schema_drift():
+    event = valid_event()
+    event["discount_code"] = "NEW10"
 
-
-test_cases = [
-    ("Valid Schema", valid_event),
-    ("Extra Field", extra_field_event),
-    ("Missing Field", missing_field_event),
-]
-
-
-for name, event in test_cases:
     result = detect_schema_drift(event)
 
-    status = "DRIFT" if result["is_drift"] else "MATCH"
+    assert result["is_drift"] is True
+    assert result["missing_fields"] == []
+    assert "discount_code" in result["extra_fields"]
+    assert result["reason"] == "Schema drift detected"
 
-    print(f"\n{name}")
-    print("-------------------------")
-    print(f"Status         : {status}")
-    print(f"Missing Fields : {result['missing_fields']}")
-    print(f"Extra Fields   : {result['extra_fields']}")
-    print(f"Reason         : {result['reason']}")
+
+def test_missing_field_schema_drift():
+    event = valid_event()
+    del event["tax_amount"]
+
+    result = detect_schema_drift(event)
+
+    assert result["is_drift"] is True
+    assert "tax_amount" in result["missing_fields"]
+    assert result["extra_fields"] == []
+    assert result["reason"] == "Schema drift detected"
